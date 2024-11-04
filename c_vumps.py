@@ -7,22 +7,22 @@ from scipy.linalg import polar
 from a_umps import UniformMPS, TransferMatrix
 
 
-def vumps_algorithm(h, guess_psi0, tol):
+def vumps_algorithm(h, guess_umps0, tol):
     """Find the uMPS ground state of the Hamiltonian h with an initial guess up to tolerance tol."""
-    vumps_engine = VUMPSEngine(guess_psi0, h, tol/10)
+    vumps_engine = VUMPSEngine(guess_umps0, h, tol/10)
     maxruns = 1_000
     for i in range(maxruns):
         vumps_engine.run()
         if vumps_engine.err <= tol:
-            psi0 = vumps_engine.psi
-            e0 = psi0.get_bond_expectation_value(h)
+            umps0 = vumps_engine.umps
+            e0 = umps0.get_bond_expectation_value(h)
             var0 = vumps_engine.get_energy_variance()
-            print(f"Ground state converged up to tol={tol} in gradient norm. " \
+            print(f"uMPS ground state converged with VUMPS up to tol={tol} in gradient norm. " \
                   + f"Final error after {i+1} iterations: {vumps_engine.err}.\n" \
                   + f"Ground state energy density: {e0}. \n"
                   + f"Ground state variance density: {var0}.")
-            return e0, psi0, var0
-    raise RuntimeError(f"Ground state did not converge up to tol={tol}. \
+            return e0, umps0, var0
+    raise RuntimeError(f"uMPS ground state did not converge with VUMPS up to tol={tol}. \
                         Final error after {maxruns} runs: {vumps_engine.err}.")
 
 
@@ -38,11 +38,11 @@ class VUMPSEngine:
     
     Parameters
     ----------
-    psi, h, tol: Same as attributes.
+    umps, h, tol: Same as attributes.
 
     Attributes
     ----------
-    psi: UniformMPS
+    umps: UniformMPS
          The current state to be iteratively optimized towards the ground state.
     h: np.array[ndim=4]
        The two-site Hamiltonian of which the ground state is searched.
@@ -53,32 +53,32 @@ class VUMPSEngine:
     Rh: np.array[ndim=2]
         Right environment computed from geometric sum of transfer matrix TR.
     err: float
-         The error measure for psi, equal to the gradient norm ||Heff_AC(AC) - AL Heff_C(C)||.
+         The error measure for umps, equal to the gradient norm ||Heff_AC(AC) - AL Heff_C(C)||.
     """
-    def __init__(self, psi, h, tol):
-        self.psi = psi.copy()
-        self.h = subtract_energy_offset(self.psi, h, canonical_form=False)
+    def __init__(self, umps, h, tol):
+        self.umps = umps.copy()
+        self.h = subtract_energy_offset(self.umps, h, canonical_form=False)
         self.tol = tol
-        self.Lh = get_Lh(self.psi, self.h, canonical_form=False, guess=None, tol=self.tol)
-        self.Rh = get_Rh(self.psi, self.h, canonical_form=False, guess=None, tol=self.tol)
+        self.Lh = get_Lh(self.umps, self.h, canonical_form=False, guess=None, tol=self.tol)
+        self.Rh = get_Rh(self.umps, self.h, canonical_form=False, guess=None, tol=self.tol)
         self.err = self.get_gradient_norm()
         
     def run(self):
-        """Perform one update of self.psi in the variational ground state optimization for self.h.
+        """Perform one update of self.umps in the variational ground state optimization for self.h.
         
         1) AC -> ground state of Heff1,
         2) C -> ground state of Heff0,
         3) AL/AR from left/right polar decompositions of AC and C.
         """
-        H_eff_1 = Heff1(self.h, self.Lh, self.psi.AL, self.psi.AR, self.Rh)
-        H_eff_0 = Heff0(self.h, self.Lh, self.psi.AL, self.psi.AR, self.Rh)
-        AC_new = self.get_theta_gs(Heff=H_eff_1, guess=self.psi.AC)  
-        C_new = self.get_theta_gs(Heff=H_eff_0, guess=self.psi.C)  
+        H_eff_1 = Heff1(self.h, self.Lh, self.umps.AL, self.umps.AR, self.Rh)
+        H_eff_0 = Heff0(self.h, self.Lh, self.umps.AL, self.umps.AR, self.Rh)
+        AC_new = self.get_theta_gs(Heff=H_eff_1, guess=self.umps.AC)  
+        C_new = self.get_theta_gs(Heff=H_eff_0, guess=self.umps.C)  
         AL_new, AR_new = get_AL_AR(AC_new, C_new)  
-        self.psi = UniformMPS(AL_new, AR_new, AC_new, C_new)
-        self.h = subtract_energy_offset(self.psi, self.h, canonical_form=False)
-        self.Lh = get_Lh(self.psi, self.h, canonical_form=False, guess=self.Lh, tol=self.tol)
-        self.Rh = get_Rh(self.psi, self.h, canonical_form=False, guess=self.Rh, tol=self.tol)
+        self.umps = UniformMPS(AL_new, AR_new, AC_new, C_new)
+        self.h = subtract_energy_offset(self.umps, self.h, canonical_form=False)
+        self.Lh = get_Lh(self.umps, self.h, canonical_form=False, guess=self.Lh, tol=self.tol)
+        self.Rh = get_Rh(self.umps, self.h, canonical_form=False, guess=self.Rh, tol=self.tol)
         self.err = self.get_gradient_norm()
 
     @staticmethod
@@ -90,23 +90,23 @@ class VUMPSEngine:
         return theta_gs
 
     def get_gradient_norm(self):
-        """Compute the gradient norm ||Heff1(AC) - AL Heff0(C)|| for self.psi."""
-        H_eff_1 = Heff1(self.h, self.Lh, self.psi.AL, self.psi.AR, self.Rh)
-        H_eff_0 = Heff0(self.h, self.Lh, self.psi.AL, self.psi.AR, self.Rh)
-        AC = H_eff_1._matvec(np.reshape(self.psi.AC, H_eff_1.shape[1]))  # vL.p.vR
+        """Compute the gradient norm ||Heff1(AC) - AL Heff0(C)|| for self.umps."""
+        H_eff_1 = Heff1(self.h, self.Lh, self.umps.AL, self.umps.AR, self.Rh)
+        H_eff_0 = Heff0(self.h, self.Lh, self.umps.AL, self.umps.AR, self.Rh)
+        AC = H_eff_1._matvec(np.reshape(self.umps.AC, H_eff_1.shape[1]))  # vL.p.vR
         AC = np.reshape(AC, H_eff_1.shape_theta)  # vL p vR
-        C = H_eff_0._matvec(np.reshape(self.psi.C, H_eff_0.shape[1]))  # vL.vR
+        C = H_eff_0._matvec(np.reshape(self.umps.C, H_eff_0.shape[1]))  # vL.vR
         C = np.reshape(C, H_eff_0.shape_theta)  # vL vR
-        ALC = np.tensordot(self.psi.AL, C, axes=(2, 0))  # vL p [vR], [vL] vR
+        ALC = np.tensordot(self.umps.AL, C, axes=(2, 0))  # vL p [vR], [vL] vR
         gradient_norm = np.linalg.norm(AC - ALC)
         return gradient_norm
     
     def get_energy_variance(self):
-        """For the Hamiltonian H = sum_n h_{n,n+1}, compute the energy variance density of self.psi.
+        """For the Hamiltonian H = sum_n h_{n,n+1}, compute the energy variance density of self.umps.
 
-        var(H) = <psi|H^2|psi> - <psi|H|psi>^2 = <psi|(H-<psi|H|psi>)^2|psi>.
+        var(H) = <umps|H^2|umps> - <umps|H|umps>^2 = <umps|(H-<umps|H|umps>)^2|umps>.
 
-        Diagrammatic representation for the variance density (after h -> h - <psi|h|psi>):
+        Diagrammatic representation for the variance density (after h -> h - <umps|h|umps>):
 
         .----(AC)--(AR)--.     .--(AL)--(AC)--(AR)--.     .--(AC)--(AR)--.     .--(AC)--(AR)--(AR)--.     
         |     |     |    |     |   |     |     |    |     |   |     |    |     |   |     |     |    |     
@@ -126,9 +126,9 @@ class VUMPSEngine:
         """
         h = self.h
         Lh = self.Lh
-        AL = self.psi.AL
-        AC = self.psi.AC
-        AR = self.psi.AR
+        AL = self.umps.AL
+        AC = self.umps.AC
+        AR = self.umps.AR
         Rh = self.Rh
         ACAR = np.tensordot(AC, AR, axes=(2, 0))  # vL p1 [vR], [vL] p2 vR  -> vL p1 p2 vR
         ACAR_h = np.tensordot(ACAR, h, axes=((1, 2), (2, 3)))  # vL [p1] [p2] vR, p1 p2 [p1*] [p2*]
@@ -296,8 +296,8 @@ class InverseGeometricSum(LinearOperator):
         return X
 
     
-def get_Lh(psi, h, canonical_form, guess, tol):
-    """Compute left environment Lh from geometric sum of transfer matrix TL (psi not necessarily in 
+def get_Lh(umps, h, canonical_form, guess, tol):
+    """Compute left environment Lh from geometric sum of transfer matrix TL (umps not necessarily in 
     canonical form).
 
      .---     .--(AL)--(AL)---                   ---(AL)---^n
@@ -306,9 +306,9 @@ def get_Lh(psi, h, canonical_form, guess, tol):
      |        |   |     |                            |
      .---     .-(AL*)-(AL*)---                   --(AL*)---
     """
-    AL = psi.AL  # vL p vR
+    AL = umps.AL  # vL p vR
     D = np.shape(AL)[0]
-    C = psi.C
+    C = umps.C
     R = np.matmul(C, np.conj(C).T)  # vL vL*
     if not canonical_form:
         TL = TransferMatrix([AL], [AL])
@@ -323,8 +323,8 @@ def get_Lh(psi, h, canonical_form, guess, tol):
     Lh = IGS.multiply_geometric_sum(lh, guess, tol)  # vR vR*
     return Lh
 
-def get_Rh(psi, h, canonical_form, guess, tol):
-    """Compute right environment Rh from geometric sum of transfer matrix TR (psi not necessarily in 
+def get_Rh(umps, h, canonical_form, guess, tol):
+    """Compute right environment Rh from geometric sum of transfer matrix TR (umps not necessarily in 
     canonical form).
 
     ---.                        ---(AR)---^n  ---(AR)--(AR)--.
@@ -333,9 +333,9 @@ def get_Rh(psi, h, canonical_form, guess, tol):
        |                            |             |     |    |
     ---.                        --(AR*)---    --(AR*)-(AR*)--.
     """
-    AR = psi.AR  # vL p vR
+    AR = umps.AR  # vL p vR
     D = np.shape(AR)[0]
-    C = psi.C
+    C = umps.C
     L = np.matmul(C.T, np.conj(C))  # vR vR*
     if not canonical_form:
         TR = TransferMatrix([AR], [AR], transpose=True)
@@ -351,17 +351,17 @@ def get_Rh(psi, h, canonical_form, guess, tol):
     return Rh
 
 
-def subtract_energy_offset(psi, h, canonical_form):
-    """Subtract energy of psi from two site Hamiltonian h (psi not necessarily in canonical form).
+def subtract_energy_offset(umps, h, canonical_form):
+    """Subtract energy of umps from two site Hamiltonian h (umps not necessarily in canonical form).
     
-                                           .--(AL)--(AL)--.
-                                           |   |     |    |
-    h -> h - e * Id with e = <psi|h|psi> = | (----h----) (R)    
-                                           |   |     |    |
-                                           .-(AL*)--(AL*)-.  
+                                             .--(AL)--(AL)--.
+                                             |   |     |    |
+    h -> h - e * Id with e = <umps|h|umps> = | (----h----) (R)    
+                                             |   |     |    |
+                                             .-(AL*)--(AL*)-.  
     """
-    AL = psi.AL  # vL p vR
-    R = np.matmul(psi.C, np.conj(psi.C).T)  # vL vL*
+    AL = umps.AL  # vL p vR
+    R = np.matmul(umps.C, np.conj(umps.C).T)  # vL vL*
     if not canonical_form:
         T = TransferMatrix([AL], [AL])
         _, R = T.get_leading_eigenpairs(k=1, guess=R)
