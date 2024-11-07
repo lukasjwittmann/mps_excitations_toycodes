@@ -34,6 +34,7 @@ class TFIModelFinite:
 
     # Hamiltonian and translation matrices for exact diagonalization
     def get_H_bonds(self, bc):
+        """Generate the TFI two-site Hamiltonians as sparse matrices."""
         N = self.N
         J = self.J
         g = self.g
@@ -75,6 +76,8 @@ class TFIModelFinite:
             raise ValueError(f"The boundary conditions (bc) must be either \"open\" or \"periodic\".")
     
     def get_H(self, bc):
+        """Generate the full TFI Hamiltonian as a sparse matrix, equal to the sum of all two-site 
+        Hamiltonians."""
         N = self.N
         H = sparse.csr_matrix((2**N, 2**N))
         if bc == "open":
@@ -91,15 +94,20 @@ class TFIModelFinite:
             raise ValueError(f"The boundary conditions (bc) must be either \"open\" or \"periodic\".")
 
     def integer_to_binary(self, s):
+        """Convert an integer number to a binary number."""
         return bin(s)[2:].zfill(self.N)
 
     def translate_binary(self, s):
+        """Translate a binary number by one bit to the right."""
         return s[-1] + s[:-1]
 
     def binary_to_integer(self, s):
+        """Convert a binary number to an integer number."""
         return int(s, base=2)
         
     def get_T(self):
+        """Generate the translation operator T|s1, ..., sN> = |sN, s1, ..., s(N-1)> as a sparse
+        matrix."""
         N = self.N
         T = sparse.lil_matrix((2**N, 2**N))
         for s in range(2**N):
@@ -108,6 +116,8 @@ class TFIModelFinite:
         return T
 
     def get_T2(self):
+        """Generate the squared translation operator T^2|s1, ..., sN> = |s(N-1), sN, s1, ..., s(N-2)>
+        as a sparse matrix."""
         N = self.N
         T2 = sparse.lil_matrix((2**N, 2**N))
         for s in range(2**N):
@@ -117,6 +127,7 @@ class TFIModelFinite:
         
     # bond Hamiltonians and MPO for MPS methods
     def get_h_bonds(self):
+        """Generate the TFI two-site Hamiltonians as local tensors."""
         N = self.N
         J = self.J
         g = self.g
@@ -142,6 +153,7 @@ class TFIModelFinite:
         return h_bonds
 
     def get_mpo(self, bc):
+        """Generate the TFI Hamiltonian as a matrix product operator."""
         N = self.N
         J = self.J
         g = self.g
