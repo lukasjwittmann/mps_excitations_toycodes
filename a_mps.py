@@ -195,7 +195,7 @@ class MPS:
         E = np.tensordot(E, W_N, axes=((0, 2), (0, 2)))  
         # [wR(N-1)] vR(N-1)* [pN], [wL(N-1)] pN [pN*]
         E = np.tensordot(E, np.conj(AR_N), axes=((0, 1), (0, 1)))  # [vR(N-1)*] [pN], [vL(N-1)] [pN]
-        return E
+        return np.real_if_close(E)
     
     def get_mpo_variance(self, Ws):
         """Compute the variance of a matrix product operator.
@@ -214,7 +214,7 @@ class MPS:
         E = self.get_mpo_expectation_value(Ws)
         E2 = self.get_mpo_expectation_value(W2s)
         var = E2 - E**2
-        return var
+        return np.real_if_close(var)
     
     def get_entanglement_entropies(self):
         """Compute the entanglement entropies for all self.N-1 bipartitions of the MPS instance."""
