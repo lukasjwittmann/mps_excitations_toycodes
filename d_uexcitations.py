@@ -34,7 +34,7 @@ class VariationalPlaneWaveExcitationEngine:
     ----------
     umps0: UniformMPS
            The ground state on top of which the excited states are searched.
-    h, p, k, tol: Same as attributes.
+    h, p, tol: Same as attributes.
     umps0_tilde: UniformMPS or None
                  If not None, second degnerate, symmetry-broken ground state.
 
@@ -44,8 +44,6 @@ class VariationalPlaneWaveExcitationEngine:
        The two-site Hamiltonian of which the excitations are searched.
     p: float
        Momentum value between -pi and pi.
-    k: int
-       The number of excitations to be computed (only a few lowest-lying have physical meaning).
     tol: float
          The tolerance up to which geometric sum environments are computed with gmres.
     VL: np.array[ndim=3]
@@ -63,10 +61,9 @@ class VariationalPlaneWaveExcitationEngine:
     IGS_LR: InverseGeometricSum
             Inverse geometric sum of the mixed transfer matrix of AL and AR.
     """
-    def __init__(self, umps0, h, p, k, tol, umps0_tilde=None):
+    def __init__(self, umps0, h, p, tol, umps0_tilde=None):
         self.h = subtract_energy_offset(umps0, h, canonical_form=True)
         self.p = p
-        self.k = k
         self.tol = tol
         self.VL = self.get_VL(umps0.AL)
         self.AL = umps0.AL
@@ -87,16 +84,16 @@ class VariationalPlaneWaveExcitationEngine:
             self.IGS_LR = InverseGeometricSum(umps0.AL, umps0_tilde.AR, R=None, L=None, \
                                               transpose=False, alpha=np.exp(1.j * p), pseudo=False)
             
-    def run(self):
-        """For one momentum value self.p, compute self.k excitations of self.h."""
+    def run(self, k):
+        """For one momentum value self.p, compute k excitations of self.h."""
         H_eff = Heff(self.h, self.p, self.VL, self.AL, self.AR, self.Lh, self.Rh, \
                      self.IGS_RL, self.IGS_LR, self.tol)
-        es, Xs = eigsh(H_eff, k=self.k, which="SA")
+        es, Xs = eigsh(H_eff, k, which="SA")
         Xs_matrices = []
-        for i in range(self.k):
+        for i in range(k):
             X = Xs[:, i]
             Xs_matrices.append(np.reshape(X, H_eff.shape_X))
-        if self.k == 1:
+        if k == 1:
             return es[0], Xs_matrices[0]        
         return es, Xs_matrices
 
