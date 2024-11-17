@@ -15,7 +15,7 @@ def dmrg_algorithm(mpo, guess_mps0, D_max, eps, num_runs):
     E0 = mps0.get_mpo_expectation_value(mpo)
     var0 = mps0.get_mpo_variance(mpo)
     bond_dimensions0 = mps0.get_bond_dimensions()
-    print(f"Performed ground state search with {num_runs} DMRG runs. \n" \
+    print(f"Performed MPS ground state search with {num_runs} DMRG runs. \n" \
           + f"Ground state energy: {E0}. \n" \
           + f"Ground state variance: {var0}. \n" \
           + f"Bond dimensions: {bond_dimensions0}.")
