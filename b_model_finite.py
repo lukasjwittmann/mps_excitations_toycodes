@@ -263,11 +263,13 @@ class TFIModelFinite:
         return E0
     
     def get_exact_excitation_dispersion(self):
-        """Compute the exact excitation dispersion relation for continuous momenta."""
+        """Compute the exact excitation dispersion relation for discrete and continuous momenta."""
+        ps_discrete = self.get_ps()
+        es_discrete = self.get_epsilon(ps_discrete)
         N = self.N
         if N % 2 == 0:
-            ps_exact = np.arange(-N//2 + 1, N//2 + 0.1, 0.1)
+            ps_continuous = np.arange(-N//2 + 1, N//2 + 0.1, 0.1)
         elif N % 2 == 1:
-            ps_exact = np.arange(-(N-1)//2, (N-1)//2 + 1 + 0.1, 0.1)
-        es_exact = self.get_epsilon(ps_exact)
-        return ps_exact, es_exact
+            ps_continuous = np.arange(-(N-1)//2, (N-1)//2 + 1 + 0.1, 0.1)
+        es_continuous = self.get_epsilon(ps_continuous)
+        return ps_discrete, es_discrete, ps_continuous, es_continuous
