@@ -5,29 +5,21 @@ from scipy.sparse.linalg import LinearOperator, eigsh
 from scipy.linalg import svd
 
 
-def dmrg_algorithm(mpo, guess_mps0, D_max, eps, tol):
-    """Find the MPS ground state of an MPO Hamiltonian with an initial guess up to tolerance tol."""
+def dmrg_algorithm(mpo, guess_mps0, D_max, eps, num_runs):
+    """Find the MPS ground state of an MPO Hamiltonian with an initial guess and num_runs DMRG runs.
+    Allow maximal bond dimension D_max and discard any singular values smaller than eps."""
     dmrg_engine = DMRGEngine(guess_mps0, mpo, D_max, eps)
-    maxruns = 1_000
-    E = 1.e+16
-    for i in range(maxruns):
+    for i in range(num_runs):
         dmrg_engine.run()
-        E_new = dmrg_engine.mps.get_mpo_expectation_value(mpo)
-        err = np.abs(E - E_new)
-        if err <= tol:
-            E0 = E_new
-            mps0 = dmrg_engine.mps
-            var0 = mps0.get_mpo_variance(mpo)
-            bond_dimensions0 = mps0.get_bond_dimensions()
-            print(f"MPS ground state converged with DMRG up to tol={tol} in energy difference. " \
-                  + f"Final error after {i+1} iterations: {err}.\n" \
-                  + f"Ground state energy: {E0}. \n" \
-                  + f"Ground state variance: {var0}. \n" \
-                  + f"Bond dimensions: {bond_dimensions0}.")
-            return E0, mps0, var0
-        E = E_new
-    raise RuntimeError(f"MPS ground state did not converge with DMRG up to tol={tol} in energy \
-                       difference. Final error after {maxruns} runs: {err}.")            
+    mps0 = dmrg_engine.mps
+    E0 = mps0.get_mpo_expectation_value(mpo)
+    var0 = mps0.get_mpo_variance(mpo)
+    bond_dimensions0 = mps0.get_bond_dimensions()
+    print(f"Performed ground state search with {num_runs} DMRG runs. \n" \
+          + f"Ground state energy: {E0}. \n" \
+          + f"Ground state variance: {var0}. \n" \
+          + f"Bond dimensions: {bond_dimensions0}.")
+    return E0, mps0, var0           
 
 
 class DMRGEngine:
